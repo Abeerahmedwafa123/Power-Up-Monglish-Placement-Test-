@@ -1354,7 +1354,6 @@
 
   <div class="results-actions">
     <button class="btn btn-outline" onclick="reviewAnswers()">Review Answers</button>
-    <button class="btn btn-success" id="download-btn" onclick="downloadCSV(window._lastResultData)" style="background:#16a34a;border-color:#16a34a;color:#fff" title="Download this result as a CSV row for the Excel tracker">&#11123; Download Results</button>
     <button class="btn btn-primary" onclick="window.print()">Print Results</button>
     <button class="btn btn-navy" onclick="location.reload()">New Test</button>
   </div>
@@ -1629,29 +1628,24 @@ function submitExam(autoSubmit = false) {
 // SEND TO SHEETS
 // =====================================
 function sendToSheets(data) {
-  // Store for the download button
-  window._lastResultData = data;
-
   const statusEl = document.getElementById('send-status');
-  
+
   statusEl.innerHTML = `
     <div class="submit-status sending">
       <div class="spinner"></div>
-      <div class="status-text"><strong>Sending results...</strong><span>Saving to Google Sheets</span></div>
+      <div class="status-text"><strong>Saving to Google Drive...</strong><span>Adding result to Power Up Placement Test sheet</span></div>
     </div>`;
 
   if (!WEBHOOK_URL || WEBHOOK_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
     setTimeout(() => {
       statusEl.innerHTML = `
-        <div class="submit-status" style="border-left-color:#F26522;background:#fffaf6">
-          <div class="status-icon">&#128190;</div>
+        <div class="submit-status" style="border-left-color:#9AA5BC">
+          <div class="status-icon">&#9888;</div>
           <div class="status-text">
-            <strong style="color:#0D1B3E">Google Sheets not connected yet</strong>
-            <span style="color:#666">Use the <strong>Download Results</strong> button below to save this result as an Excel-ready CSV row.</span>
+            <strong style="color:#0D1B3E">Automation not yet activated</strong>
+            <span style="color:#666">Please inform your teacher of your result: <strong>${data.totalScore}/36 — ${data.level}</strong></span>
           </div>
         </div>`;
-      // Auto-trigger download after a short pause
-      setTimeout(() => downloadCSV(data), 600);
     }, 800);
     return;
   }
@@ -1665,97 +1659,23 @@ function sendToSheets(data) {
   .then(() => {
     statusEl.innerHTML = `
       <div class="submit-status success">
-        <div class="status-icon">&#10003;</div>
-        <div class="status-text"><strong>Results saved successfully</strong><span>Added to Power Up Placement Test sheet in Google Drive</span></div>
+        <div class="status-icon">&#9989;</div>
+        <div class="status-text">
+          <strong style="color:#0D1B3E">Result saved to Google Drive</strong>
+          <span style="color:#666">Your score and level have been added to the Monglish placement register.</span>
+        </div>
       </div>`;
   })
-  .catch(err => {
+  .catch(() => {
     statusEl.innerHTML = `
       <div class="submit-status failed">
         <div class="status-icon">&#9888;</div>
-        <div class="status-text"><strong>Could not save automatically</strong><span>Please record the result manually. Score: ${data.totalScore}/36 - ${data.level}</span></div>
+        <div class="status-text">
+          <strong>Connection error — result not saved</strong>
+          <span>Please note your result: <strong>${data.totalScore}/36 — ${data.level}</strong> and inform your teacher.</span>
+        </div>
       </div>`;
   });
-}
-
-// =====================================
-// DOWNLOAD RESULTS AS CSV
-// =====================================
-function downloadCSV(data) {
-  if (!data) { alert('No result data available. Please complete the exam first.'); return; }
-
-  // BOM prefix for Excel UTF-8 compatibility
-  const BOM = '\uFEFF';
-
-  // 20 columns — matches Power_Up_Placement_Test.xlsx headers exactly
-  const headers = [
-    'Timestamp', 'Student Full Name', 'Age', 'Teacher',
-    'Sec A Score Vocab (/12)', 'Sec A Performance',
-    'Sec B Score Grammar (/18)', 'Sec B Performance', 'Time Remaining',
-    'Sec C Score Lang Func (/6)', 'Sec C Performance',
-    'Questions Answered', 'TOTAL SCORE (/36)',
-    'Suggested Power Up Level', 'Language Profile',
-    'Vocab Diagnosis', 'Grammar Diagnosis', 'Func. Diagnosis',
-    'Oral Check (Strong/OK/Weak)', 'Final Placement'
-  ];
-
-  const row = [
-    data.timestamp        || '',
-    data.name             || '',
-    data.age              || '',
-    data.teacher          || '',
-    data.secA             || 0,
-    data.secAPerf         || '',
-    data.secB             || 0,
-    data.secBPerf         || '',
-    data.timeRemaining    || '',
-    data.secC             || 0,
-    data.secCPerf         || '',
-    data.totalAnswered    || '',
-    data.totalScore       || 0,
-    data.level            || '',
-    data.profile          || '',
-    data.vocabDiag        || '',
-    data.grammarDiag      || '',
-    data.funcDiag         || '',
-    '',  // Oral Check — teacher fills in
-    ''   // Final Placement — teacher fills in
-  ];
-
-  // Proper CSV escaping
-  const esc = v => {
-    const s = String(v === null || v === undefined ? '' : v);
-    return (s.includes(',') || s.includes('"') || s.includes('\n'))
-      ? '"' + s.replace(/"/g, '""') + '"'
-      : s;
-  };
-
-  const csvContent = BOM
-    + headers.map(esc).join(',') + '\r\n'
-    + row.map(esc).join(',');
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  const safeName = (data.name || 'Student').replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  const date     = new Date().toISOString().slice(0, 10);
-  a.download = 'PowerUp_Result_' + safeName + '_' + date + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  // Update download button to confirm
-  const btn = document.getElementById('download-btn');
-  if (btn) {
-    btn.textContent = '✓ Downloaded!';
-    btn.style.background = '#15803d';
-    setTimeout(() => {
-      btn.innerHTML = '&#11123; Download Results';
-      btn.style.background = '#16a34a';
-    }, 3000);
-  }
 }
 
 // =====================================
